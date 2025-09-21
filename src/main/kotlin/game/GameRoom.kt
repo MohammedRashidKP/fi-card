@@ -1,9 +1,6 @@
 package com.closemates.games.game
 
-import com.closemates.games.models.GameState
-import com.closemates.games.models.PlayerScore
-import com.closemates.games.models.RoundScore
-import com.closemates.games.models.ScoreCard
+import com.closemates.games.models.*
 import kotlinx.coroutines.*
 
 data class GameRoom(
@@ -19,8 +16,9 @@ data class GameRoom(
     var callerId: String? = null,
     var callValue: Int? = null,
     var strikerId: String? = null,
-    var roundHistory: List<RoundScore>? = null,
-    var globalLeaderBoard: List<PlayerScore>? = null
+    var strikeValue: Int? = null,
+    var roundHistory: MutableList<RoundScore> = mutableListOf(),
+    var globalLeaderBoard: List<PlayerPoints> = mutableListOf()
 ) {
     fun currentPlayer(): Player = players[currentIndex]
 
@@ -33,11 +31,6 @@ data class GameRoom(
         val playerScores: MutableMap<String, Int> = players.associate { player ->
             player.id to player.handValue(jokerCard!!)
         }.toMutableMap()
-        val minScore = this.players.minOf { it.handValue(this.jokerCard!!) }
-
-        val adjustedScores = playerScores.mapValues { (_, score) ->
-            if (score == minScore) 0 else score
-        }.toMutableMap()
 
         var winnerId: String = callerId!!
 
@@ -46,22 +39,19 @@ data class GameRoom(
         if (strikerId != null) {
             val strikerScore = playerHandValue(strikerId!!)
             if (strikerScore!! <= callerScore!!) {
-                adjustedScores[callerId!!] = maxScore
-                adjustedScores[strikerId!!] = 0
+                playerScores[callerId!!] = maxScore
+                playerScores[strikerId!!] = 0
                 winnerId = strikerId!!
-            } else {
-                adjustedScores[callerId!!] = 0
-                adjustedScores[strikerId!!] = maxScore
             }
         } else {
-            adjustedScores[callerId!!] = 0
+            playerScores[callerId!!] = 0
         }
         val playerScoreList: List<PlayerScore> =
             players.map { player ->
                 PlayerScore(
                     playerId = player.id,
                     playerName = player.name,
-                    score = adjustedScores[player.id] ?: 0
+                    score = playerScores[player.id] ?: 0
                 )
             }
         return ScoreCard(winnerId, playerScoreList.sortedBy { it.score })
@@ -77,7 +67,7 @@ data class GameRoom(
         strikeJob?.cancel()
 
         strikeJob = roomScope.launch {
-            delay(5000) // 5 seconds strike window
+            delay(7000) // 10 seconds strike window
             onTimeout() // e.g. finish game, broadcast results
         }
     }
@@ -92,6 +82,8 @@ data class GameRoom(
     }
 
     fun startNewRound() {
+
+        if (gameState != GameState.FINISHED) return
         // Increment round and dealer
         roundNumber += 1
 
@@ -104,10 +96,10 @@ data class GameRoom(
         // Fresh shuffled deck
         deck.clear()
         deck.addAll(Card.shuffledDeck())
+        deck.addAll(Card.shuffledDeck())
 
         // Joker is first revealed card
-        val joker = deck.removeFirst()
-        jokerCard = joker
+       assignJoker()
 
         // Deal 5 cards to each player
         for (p in players) {
@@ -133,6 +125,7 @@ data class GameRoom(
         callValue = null
         strikerId = null
         callerId = null
+        strikeValue = null
     }
 }
 
@@ -146,6 +139,9 @@ fun GameRoom.startNewGame() {
 
     // Fresh shuffled deck
     deck.addAll(Card.shuffledDeck())
+    if (players.size > 4) {
+        deck.addAll(Card.shuffledDeck())
+    }
 
     // Dealer deals 5 cards to each player
     for (p in players) {
@@ -155,8 +151,8 @@ fun GameRoom.startNewGame() {
     }
 
     // Joker is first revealed card (suit ignored)
-    val joker = deck.removeFirst()
-    jokerCard = joker
+
+    assignJoker()
 
     // Place an open card specifically for the first player (after dealer)
     val firstPlayerIndex = (dealerIndex + 1) % players.size
@@ -175,4 +171,17 @@ fun GameRoom.startNewGame() {
     callValue = null
     strikerId = null
     callerId = null
+    strikeValue = null
+}
+
+private fun GameRoom.assignJoker() {
+    val nonJokerIndices = deck.withIndex()
+        .filter { !it.value.isJoker }  // assuming you have isJoker flag
+        .map { it.index }
+
+    if (nonJokerIndices.isNotEmpty()) {
+        val randomIndex = nonJokerIndices.random()   // pick a random index
+        jokerCard = deck[randomIndex]           // select the card
+        deck.removeAt(randomIndex)                   // remove by index, safe with duplicates
+    }
 }

@@ -9,27 +9,39 @@ enum class Rank(val value: Int) {
     EIGHT(8), NINE(9), TEN(10), JACK(10), QUEEN(10), KING(10)
 }
 
+enum class JokerColor { RED, BLACK }
+
+
 @Serializable
-data class Card(val suit: Suit, val rank: Rank) {
+data class Card(val suit: Suit?, val rank: Rank?, val jokerColor: JokerColor? = null) {
+
+    val isJoker: Boolean = jokerColor != null
+
     companion object {
 
         /** Creates a standard 52-card deck in rank 1..13 for each suit. */
         private fun fullDeck(): List<Card> {
-            val deck = mutableListOf<Card>();
-            for (suit in Suit.values()) {
-                for (rank in Rank.values()) {
+            val deck = mutableListOf<Card>()
+            for (suit in Suit.entries) {
+                for (rank in Rank.entries) {
                     deck.add(Card(suit, rank))
                 }
             }
+            deck.add(Card(null, null, JokerColor.RED))
+            deck.add(Card(null, null, JokerColor.BLACK))
             return deck
         }
 
         /** Convenience: get a new shuffled deck (mutable) */
         fun shuffledDeck(random: Random = Random(System.currentTimeMillis())): MutableList<Card> =
-            fullDeck().shuffled(random).toMutableList()
+            fullDeck().shuffled(random)
+                .shuffled()
+                .toMutableList()
     }
 }
 
 fun Card.value(jokerRank: Rank): Int {
-    return if (this.rank == jokerRank) 0 else this.rank.value
+    return if (this.isJoker) 0             // physical joker
+    else if (this.rank == jokerRank) 0 // round joker
+    else this.rank!!.value
 }

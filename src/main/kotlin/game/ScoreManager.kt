@@ -1,11 +1,9 @@
 package com.closemates.games.game
 
-import com.closemates.games.models.PlayerScore
-import com.closemates.games.models.RoundScore
-import com.closemates.games.models.ScoreCard
-import com.closemates.games.models.ScoreFile
+import com.closemates.games.models.*
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.util.Comparator
 
 object ScoreManager {
     private val json = Json { prettyPrint = true }
@@ -19,72 +17,74 @@ object ScoreManager {
         }
     }
 
-    fun saveRoundScore(roomId: String, roundNumber: Int, scoreCard: ScoreCard) {
+    fun saveLeaderBoardPoint(roomId: String, roundNumber: Int, scoreCard: ScoreCard) {
+        val scores = scoreCard.roundScore
 
-        val roundScores = scoreCard.roundScore.map { score ->
-            PlayerScore(
-                playerId = score.playerId,
-                playerName = score.playerName,
-                score = score.score
-            )
+        // Start with empty points map
+        val pointsMap = mutableMapOf<String, Int>()
+
+        // 1️⃣ Winner or striker points
+        scores.forEach { ps ->
+            pointsMap[ps.playerId] = when {
+                scoreCard.strikerId != null && ps.playerId == scoreCard.strikerId -> 4
+                scoreCard.strikerId == null && ps.playerId == scoreCard.winnerId -> 5
+                else -> 0
+            }
         }
+
+        // 2️⃣ Compute second and third least scores
+        val sortedScores = scores.sortedBy { it.score }
+        val secondLeastScore = sortedScores.getOrNull(1)?.score
+        val thirdLeastScore = sortedScores.getOrNull(2)?.score
+
+        // Assign 2 points to second least
+        secondLeastScore?.let { secScore ->
+            sortedScores.filter { it.score == secScore }
+                .forEach { pointsMap[it.playerId] = (pointsMap[it.playerId] ?: 0) + 2 }
+        }
+
+        // Assign 1 point to third least
+        thirdLeastScore?.let { thirdScore ->
+            sortedScores.filter { it.score == thirdScore }
+                .forEach { pointsMap[it.playerId] = (pointsMap[it.playerId] ?: 0) + 1 }
+        }
+
+        // Convert to list
+        val pointMap = scores.map { PlayerPoints(it.playerId, pointsMap[it.playerId] ?: 0) }
         val scoreFile = getScoreFile(roomId)
-        scoreFile.rounds.add(RoundScore(roundNumber, roundScores))
+        scoreFile.rounds.add(RoundPoint(roundNumber, pointMap))
         val file = File("scores/$roomId.json")
         file.parentFile.mkdirs() // make sure folder exists
         file.writeText(json.encodeToString(ScoreFile.serializer(), scoreFile))
     }
 
-    fun getRoundHistoryPerRound(roomId: String): List<RoundScore> {
-        val totals = mutableMapOf<String, Int>() // running totals per player
-        val scoreFile = getScoreFile(roomId)
-        val rounds =  scoreFile.rounds.map {
-            RoundScore(
-                roundNumber = it.roundNumber,
-                scores = it.scores.sortedBy {score -> score.playerId }
-            )
-        }
-
-        return rounds.map { round ->
-            val newScores = round.scores.map { ps ->
-                val runningTotal = totals.getOrDefault(ps.playerId, 0) + ps.score
-                totals[ps.playerId] = runningTotal
-                ps.copy(total = runningTotal)
-            }
-
-            // Compute rank per round based on running total
-            val ranked = newScores.sortedByDescending { it.total }
-            ranked.forEachIndexed { idx, ps -> ps.rank = idx + 1 }
-
-            round.copy(scores = ranked)
-        }
-    }
-
-
-    fun getGlobalLeaderboard(): List<PlayerScore>? {
+    fun getGlobalLeaderboard(): List<PlayerPoints> {
         val folder = File("scores")
-        if (!folder.exists() || !folder.isDirectory) return null
-
-        val globalScores = mutableListOf<PlayerScore>()
-
+        if (!folder.exists() || !folder.isDirectory) return emptyList()
+        val leaderBoard = mutableListOf<PlayerPoints>()
         folder.listFiles { f -> f.extension == "json" }?.forEach { file ->
             val scoreFile = json.decodeFromString(ScoreFile.serializer(), file.readText())
 
-            val globalScores: List<PlayerScore> = scoreFile.rounds
+            leaderBoard.addAll(scoreFile.rounds
                 .flatMap { it.scores }                  // flatten all round scores
                 .groupBy { it.playerId }                // group by player
                 .map { (playerId, scores) ->
-                    PlayerScore(
+                    PlayerPoints(
                         playerId = playerId,
-                        playerName = scores.first().playerName, // take name from first occurrence
-                        score = scores.sumOf { it.score }      // total score
+                        points = scores.sumOf { it.points }
                     )
                 }
-                .sortedByDescending { it.score }        // highest score first
-
+                .sortedBy { it.points }
+            )     // highest score first
         }
-
-        return globalScores.sortedBy { it.score }
+        return leaderBoard
+            .groupBy { it.playerId }
+            .map { (playerId, entries) ->
+                PlayerPoints(
+                    playerId = playerId,
+                    points = entries.sumOf { it.points }
+                )
+            }
     }
 
 }

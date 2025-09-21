@@ -6,7 +6,7 @@ frontend/build/
 frontend/dist/
 frontend/.DS_Store
 frontend/*.log
-
+scores
 # === Gradle / Java ===
 .gradle/
 build/

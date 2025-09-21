@@ -1,8 +1,8 @@
 package com.closemates.games.game
 
-import com.closemates.games.models.GameState
+import com.closemates.games.models.*
 import game.SessionRegistry
-import kotlin.random.Random
+import kotlinx.coroutines.delay
 
 object GameManager {
     private val rooms = mutableMapOf<String, GameRoom>()
@@ -23,19 +23,11 @@ object GameManager {
 
     suspend fun joinRoom(roomId: String, player: Player) {
         val room = rooms[roomId] ?: return
-        if (room.players.map { it.id }.contains(player.id)){
+        if (room.players.map { it.id }.contains(player.id)) {
             return
         }
-        if (room.players.size >= 10 || room.gameState != GameState.LOBBY) return
         room.players.add(player)
         broadcast(roomId)
-    }
-
-    fun addAI(roomId: String) {
-        val room = rooms[roomId] ?: return
-        if (room.players.size >= 10 || room.gameState != GameState.LOBBY) return
-        val ai = Player("AI-${Random.nextInt(1000)}", "AI Bot", isAI = true)
-        room.players.add(ai)
     }
 
     suspend fun pickOpenCard(roomId: String, playerId: String) {
@@ -47,7 +39,8 @@ object GameManager {
 
         player.hand.add(open)
         player.openCard = null
-        room.currentIndex = (room.currentIndex + 1) % room.players.size
+        advanceTurn(room)
+        SessionRegistry.sendSoundToPlayer(roomId, room.currentPlayer().id, SoundCue(SoundEvent.PLAYER_TURN))
         broadcast(roomId)
     }
 
@@ -71,8 +64,17 @@ object GameManager {
         val card = room.deck.removeFirstOrNull() ?: return
 
         player.hand.add(card)
-        room.currentIndex = (room.currentIndex + 1) % room.players.size
+
+        advanceTurn(room)
+
+        if (room.currentPlayer().isBot)
+
+            SessionRegistry.sendSoundToPlayer(roomId, room.currentPlayer().id, SoundCue(SoundEvent.PLAYER_TURN))
         broadcast(roomId)
+    }
+
+    private fun advanceTurn(room: GameRoom) {
+        room.currentIndex = (room.currentIndex + 1) % room.players.size
     }
 
     suspend fun discardCards(roomId: String, playerId: String, cardsToDiscard: List<Card>) {
@@ -97,13 +99,17 @@ object GameManager {
     suspend fun call(roomId: String, callerId: String) {
         val room = rooms[roomId] ?: return
         if (room.currentPlayer().id != callerId) return
+        if (room.callerId != null) return
         val callValue = room.playerHandValue(callerId)
         if (callValue!! > 5) return
         room.callerId = callerId
         room.callValue = callValue
         room.gameState = GameState.CALLED
+        SessionRegistry.sendSoundToAll(roomId, SoundCue(SoundEvent.CALL))
+        delay(3000)
         broadcast(roomId)
         room.startStrikePhase {
+            SessionRegistry.sendSoundToAll(roomId, SoundCue(SoundEvent.CALLER_WIN))
             finishRound(room)
         }
     }
@@ -112,17 +118,28 @@ object GameManager {
         val room = rooms[roomId] ?: return
         if (room.strikerId != null) return
         if (room.gameState != GameState.CALLED) return
-
+        val strikeValue = room.playerHandValue(strikerId)
+        if (strikeValue!! > room.callValue!!) return
+        SessionRegistry.sendSoundToAll(roomId, SoundCue(SoundEvent.STRIKE))
         room.cancelStrikePhase()
-
         room.strikerId = strikerId
+        room.strikeValue = strikeValue
+        delay(6000)
+        SessionRegistry.sendSoundToAll(roomId, SoundCue(SoundEvent.STRIKER_WIN))
         finishRound(room)
     }
 
     private suspend fun finishRound(room: GameRoom) {
         room.gameState = GameState.FINISHED
-        ScoreManager.saveRoundScore(room.id, room.roundNumber, room.getScoreCard())
-        room.roundHistory = ScoreManager.getRoundHistoryPerRound(room.id)
+        val scoreCard = room.getScoreCard()
+        ScoreManager.saveLeaderBoardPoint(room.id, room.roundNumber, scoreCard)
+        room.roundHistory.add(RoundScore(room.roundNumber, scoreCard.roundScore.map { score ->
+            PlayerScore(
+                playerId = score.playerId,
+                playerName = score.playerName,
+                score = score.score
+            )
+        }.toMutableList()))
         room.globalLeaderBoard = ScoreManager.getGlobalLeaderboard()
         room.dealerIndex = (room.dealerIndex + 1) % room.players.size
         broadcast(room.id)
@@ -134,7 +151,7 @@ object GameManager {
         val room = getRoom(roomId) ?: return
         room.startNewRound()
         room.globalLeaderBoard = ScoreManager.getGlobalLeaderboard()
-        room.roundHistory = ScoreManager.getRoundHistoryPerRound(roomId)
+        SessionRegistry.sendSoundToPlayer(roomId, room.currentPlayer().id, SoundCue(SoundEvent.PLAYER_TURN))
         broadcast(roomId)
     }
 
@@ -143,5 +160,30 @@ object GameManager {
         return (1..length)
             .map { chars.random() }
             .joinToString("")
+    }
+
+    suspend fun exitRoom(roomId: String, playerId: String) {
+        val room = getRoom(roomId) ?: return
+        val currentPlayerId = room.currentPlayer().id
+        val players = room.players
+        val exitingPlayer = players.find { it.id == playerId } ?: return
+        val exitingPlayerIndex = players.indexOf(exitingPlayer)
+        players.remove(exitingPlayer)
+
+        if (room.currentIndex >= players.size) {
+            // If currentIndex is now out of bounds, wrap around
+            room.currentIndex = 0
+        } else if (room.currentIndex > exitingPlayerIndex) {
+            // If a player before the currentIndex left, shift currentIndex back
+            room.currentIndex -= 1
+        } else if (room.currentIndex == exitingPlayerIndex) {
+            // If the current player exited, keep currentIndex same (it now points to next player)
+            // Nothing else needed
+        }
+
+        // Reset dealer if needed
+        if (room.dealerIndex >= players.size) room.dealerIndex = 0
+        room.dealerIndex = 0
+        broadcast(room.id)
     }
 }

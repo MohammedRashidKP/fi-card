@@ -2,6 +2,8 @@ package com.closemates.games.websocket
 
 import com.closemates.games.game.GameManager
 import com.closemates.games.game.startNewGame
+import com.closemates.games.models.SoundCue
+import com.closemates.games.models.SoundEvent
 import game.SessionRegistry
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -35,7 +37,7 @@ fun Route.controlRoutes(frontendUrl: String) {
         }
 
         room.startNewGame()
-
+        SessionRegistry.sendSoundToPlayer(roomId,room.currentPlayer().id, SoundCue(SoundEvent.PLAYER_TURN))
         SessionRegistry.sendToAll(room)
 
         call.respond(HttpStatusCode.OK, "Game started")

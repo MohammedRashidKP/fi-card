@@ -18,8 +18,9 @@ data class GameSnapshot(
     var callerId: String? = null,
     var callValue: Int? = null,
     var strikerId: String? = null,
-    var roundHistory: List<RoundScore>? = null,
-    var globalLeaderBoard: List<PlayerScore>? = null
+    var strikeValue: Int? = null,
+    var roundHistory: MutableList<RoundScore> = mutableListOf(),
+    var globalLeaderBoard: List<PlayerPoints>? = mutableListOf()
 )
 
 @Serializable

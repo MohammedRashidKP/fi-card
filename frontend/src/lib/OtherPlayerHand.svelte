@@ -52,6 +52,7 @@
 >
   {#each hand as card, i (card.rank + '-' + card.suit + '-' + i)}
     <Card
+      card={card}
       rank={card.rank}
       suit={card.suit}
       selected={selectedCards.includes(i)}

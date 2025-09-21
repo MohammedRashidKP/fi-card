@@ -1,19 +1,17 @@
 <script>
+  import { cardImagePath } from '$lib/utils/cards.js';
   export let discardedCards = [];
   export let openCard = null;
 </script>
 
 <div class="discard">
   {#if discardedCards.length > 0}
-    <img
-      src={`/cards/${discardedCards[discardedCards.length - 1].rank}_of_${discardedCards[discardedCards.length - 1].suit}.png`}
-      alt="Discard"
-    />
+    <img src={cardImagePath(discardedCards[discardedCards.length - 1])} alt="Discard" />
   {/if}
 
   {#if openCard}
     <div class="open">
-      <img src={`/cards/${openCard.rank}_of_${openCard.suit}.png`} alt="Open card" />
+      <img src={cardImagePath(openCard)} alt="Open card" />
     </div>
   {/if}
 </div>

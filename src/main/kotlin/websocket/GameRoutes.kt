@@ -36,9 +36,12 @@ fun Route.gameRoutes() {
                                     SessionRegistry.sendToAll(room)
                                 } else {
                                     // New player trying to join
-                                    if (room.gameState != GameState.LOBBY) {
+                                    if (room.gameState != GameState.LOBBY && room.gameState != GameState.FINISHED) {
                                         application.log.info("Cannot join ${clientMsg.playerId} , game in progress at ${room.id}")
-                                    } else {
+                                    } else if (room.players.size >= 10){
+                                        application.log.info("Cannot join ${clientMsg.playerId} , room full")
+                                    }
+                                    else {
                                         if (clientMsg.name != null) {
                                             val newPlayer = Player(clientMsg.playerId, clientMsg.name)
                                             SessionRegistry.addSession(room.id, this, clientMsg.playerId)
@@ -47,12 +50,6 @@ fun Route.gameRoutes() {
                                         }
                                     }
                                 }
-                            }
-
-
-                            "addAI" -> {
-                                GameManager.addAI(clientMsg.roomId)
-                                send("AI added")
                             }
 
                             "pickOpen" -> {
@@ -80,6 +77,18 @@ fun Route.gameRoutes() {
                             }
                             "startNewRound" -> {
                                 GameManager.startNewRound(clientMsg.roomId)
+                            }
+                            "exitRoom" -> {
+                                GameManager.exitRoom(clientMsg.roomId, clientMsg.playerId)
+                                this.close(CloseReason(CloseReason.Codes.NORMAL, "Player exited"))
+                            }
+                            "chat" -> {
+                                SessionRegistry.sendChatToAll(clientMsg.roomId, clientMsg.playerId, clientMsg.message!!)
+                            }
+                            "webrtc-offer", "webrtc-answer", "webrtc-ice" -> {
+                                val targetId = clientMsg.targetId ?: return@consumeEach
+                                // Just forward the whole raw message to the target peer
+                                SessionRegistry.forwardSignal(clientMsg.roomId, targetId, message)
                             }
                             "forceEnd" -> {
                                 val room = GameManager.getRoom(clientMsg.roomId)

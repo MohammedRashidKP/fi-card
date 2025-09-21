@@ -1,4 +1,5 @@
 <script>
+  import { cardImagePath } from '$lib/utils/cards.js';
   export let deckCount = 0;
   export let joker = null;
 </script>
@@ -8,7 +9,7 @@
   <div class="count">{deckCount}</div>
   {#if joker}
     <div class="joker">
-      <img src={`/cards/${joker.rank}_of_${joker.suit}.png`} alt="Joker" />
+      <img src={cardImagePath(joker)} alt="Joker" />
     </div>
   {/if}
 </div>

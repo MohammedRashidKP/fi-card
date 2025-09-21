@@ -1,20 +1,14 @@
 <script>
-  import { gameSnapshot, handInfo, selectedCards, hasDiscarded } from '$lib/stores';
+  import { gameSnapshot, handInfo, selectedCards, hasDiscarded, isMyTurn } from '$lib/stores';
+  import { cardImagePath } from '$lib/utils/cards.js';
   import { sendMessage } from '$lib/api';
   import PlayerHand from '$lib/PlayerHand.svelte';
-  import ScoreBoard from '$lib/ScoreBoard.svelte';
+  import EndGameScoreBoard from '$lib/EndGameScoreBoard.svelte';
+  import ManualScoreBoard from '$lib/ManualScoreBoard.svelte';
   import { get } from 'svelte/store';
   import { showScores } from '$lib/stores';
   import CallIndicator from '$lib/CallIndicator.svelte';
-
-$: if ($gameSnapshot.state === 'FINISHED') {
-  showScores.update(() => true);
-}
-
-  function cardImagePath(card) {
-    if (!card) return '';
-    return `/cards/${card.rank.toLowerCase()}_of_${card.suit.toLowerCase()}.png`;
-  }
+  import { wsConnection } from "$lib/stores";
 
   // selection logic (unchanged)
   function onCardClick(index) {
@@ -118,6 +112,30 @@ function handleCall() {
     });
     showScores.set(false);
   }
+  let menuOpen = false;
+
+    function toggleMenu() {
+      menuOpen = !menuOpen;
+    }
+
+    function handleExit() {
+        if (!confirm("Are you sure you want to exit the game?")) {
+          return; // cancel if they click "Cancel"
+        }
+
+        const socket = $wsConnection;
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({
+          action: "exitRoom",
+    roomId: $gameSnapshot.roomId,
+    playerId: $handInfo.playerId
+          }));
+          socket.close();
+        }
+
+        // optionally redirect to lobby/home
+        window.location.href = "/";
+      }
 </script>
 
 <style>
@@ -134,17 +152,18 @@ function handleCall() {
     justify-content: space-between;
   }
 
-  .table {
-    position: relative;
-    margin: 100px auto 0;
-    width: 70%;
-    height: 65vh;
-    max-width: 400px;
-    border-radius: 30px;
-    background: radial-gradient(circle at center, #006400 60%, #004d00 100%);
-    border: 20px solid #5a3825;
-    box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.7);
-  }
+.table {
+  position: relative;
+  margin: 40px auto 0; /* smaller top margin */
+  width: 70%;
+  height: 65vh;
+  max-width: 400px;
+  border-radius: 30px;
+  background: radial-gradient(circle at center, #006400 60%, #004d00 100%);
+  border: 20px solid #5a3825;
+  box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.7);
+}
+
 
   .player-slot {
     position: absolute;
@@ -164,6 +183,7 @@ function handleCall() {
     border-radius: 50%;
     padding: 2px;
     box-shadow: 0 0 10px gold;
+    animation: blink 2s infinite;
   }
 
   .avatar-wrapper { position: relative; display: inline-block; }
@@ -217,8 +237,13 @@ function handleCall() {
     align-items: center;
   }
 
+  .deck-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
   .deck {
-    position: relative; /* needed for absolute label inside */
     width: 56px;
     height: 80px;
     background: url('/cards/back.png') no-repeat center/cover;
@@ -226,18 +251,14 @@ function handleCall() {
     cursor: pointer;
   }
 
-.deck-label {
-  position: absolute;
-  top: -1.5em;          /* space above the deck */
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 1rem;       /* larger text */
-  font-weight: bold;
-  color: #ffd700;        /* bright color, e.g., gold */
-  text-shadow: 0 0 4px rgba(0,0,0,0.5); /* optional glow for better contrast */
-  white-space: nowrap;
-  animation: blink 2s infinite;
+.joker-rank {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  text-align: center;
+  color: #00ffff; /* bright yellow */
+  text-shadow: 0 0 4px rgba(255, 255, 0, 0.7);
 }
+
 @keyframes blink {
   0%, 50%, 100% {
     opacity: 1;
@@ -257,24 +278,87 @@ function handleCall() {
       overflow-y: auto;
       margin-top: 1rem;
   }
-  .show-scores-btn {
-    margin-top: 10px;      /* moves it slightly lower */
-    margin-left: 10px;
-    display: block;        /* needed for margin-left: auto to work */
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
-    border: none;
-    background: #007bff;
-    color: white;
-    cursor: pointer;
-  }
+.toolbar {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  position: relative;
+}
 
-  .show-scores-btn:hover {
-      background: #0056b3;
-  }
+.hamburger {
+  font-size: 1.5rem;
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+
+.menu {
+  position: absolute;
+  top: 100%;      /* below toolbar */
+  left: 0;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  z-index: 1000;
+}
+
+.menu-item {
+  background: none;
+  border: none;
+  padding: 0.5rem 1rem;
+  text-align: left;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.menu-item:hover {
+  background: #f0f0f0;
+}
+
+.turn-indicator {
+  position: absolute;
+  bottom: 20%;   /* adjust how far above the border */
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1rem;
+  font-weight: bold;
+  color: #ffcc00;
+  text-shadow: 0 0 5px black;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
 </style>
 
 <div class="game-container">
+<div class="toolbar">
+  <button class="hamburger" on:click={toggleMenu}>
+    ☰
+  </button>
+
+  {#if menuOpen}
+    <div class="menu">
+      <button class="menu-item" on:click={toggleScores}>
+        {#if $showScores} Hide Scores {:else} Show Scores {/if}
+      </button>
+      <button class="menu-item">
+        ⚙️ Settings
+      </button>
+      <button class="menu-item" on:click={handleExit}>
+        🚪 Exit
+      </button>
+    </div>
+  {/if}
+</div>
   <div class="table">
     {#each slottedPlayers as player (player.id)}
       <div class="player-slot {slotClass(player.slot)} {player.id === $gameSnapshot.currentPlayerId ? 'current' : ''}">
@@ -299,21 +383,18 @@ function handleCall() {
   </div>
 {/if}
 
-<button class="show-scores-btn" on:click={toggleScores}>
-    {#if $showScores} Hide Scores {:else} Show Scores {/if}
-</button>
-
+{#if $isMyTurn}
+  <p class="turn-indicator">✨ Your Turn ✨</p>
+{/if}
 <div class="center">
-  <div class="deck" on:click={handleDeckClick}></div>
-  {#if $gameSnapshot.currentPlayerName}
-    <span class="deck-label">{$gameSnapshot.currentPlayerName}</span>
+  <div class="deck-wrapper">
+     <div class="deck" on:click={handleDeckClick}></div>
+    {#if $gameSnapshot.jokerCard}
+      <p class="joker-rank">JOKER: {$gameSnapshot.jokerCard.rank}</p>
     {/if}
-  {#if $gameSnapshot.jokerCard}
-    <img src={cardImagePath($gameSnapshot.jokerCard)} alt="Joker" class="joker" />
-  {/if}
-</div>
   </div>
-
+</div>
+</div>
   <!-- Own hand -->
   <PlayerHand
     hand={$handInfo.hand}
@@ -324,15 +405,23 @@ function handleCall() {
     on:strike={handleStrike}
   />
 
-
-
-{#if showScores}
-  <ScoreBoard
+{#if $gameSnapshot.state === 'FINISHED'}
+  <EndGameScoreBoard
     scoreCard={$gameSnapshot.scoreCard}
-    globalLeaderBoard={$gameSnapshot.globalLeaderBoard}
     roundHistory={$gameSnapshot.roundHistory}
-    onClose={() => showScores.set(false)}
+    players={$gameSnapshot.players}
     on:nextRound={handleNextRound}
+    on:close={() => {/* optional: allow manual close */}}
+  />
+{/if}
+
+{#if $showScores && $gameSnapshot.state !== 'FINISHED'}
+  <ManualScoreBoard
+    scoreCard={$gameSnapshot.scoreCard}
+    roundHistory={$gameSnapshot.roundHistory}
+    globalLeaderBoard={$gameSnapshot.globalLeaderBoard}
+    players={$gameSnapshot.players}
+    on:close={() => showScores.set(false)}
   />
 {/if}
 <CallIndicator />

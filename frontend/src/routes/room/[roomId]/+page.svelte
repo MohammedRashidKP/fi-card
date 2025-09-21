@@ -1,9 +1,11 @@
 <script>
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { gameSnapshot, handInfo } from '$lib/stores';
+  import { gameSnapshot, handInfo, playerInfo } from '$lib/stores';
   import { connectWebSocket } from '$lib/api';
   import GameTable from '$lib/GameTable.svelte';
+  import ChatPanel from '$lib/ChatPanel.svelte';
+  import SoundPlayer from "$lib/SoundPlayer.svelte";
 
   let roomId;
   let playerId = '';
@@ -16,7 +18,7 @@
     const query = $page.url.searchParams;
     playerId = query.get('playerId') || '';
     playerName = query.get('playerName') || '';
-
+    playerInfo.set({ id: playerId, name: playerName, roomId });
     // Recreate join URL dynamically
     joinUrl = `${location.origin}/room/${roomId}`;
 
@@ -57,7 +59,7 @@
     }
   }
 </script>
-
+<ChatPanel />
 {#if !playerId || !playerName}
   <div class="join-form">
     <h2>Join Room {roomId}</h2>
@@ -106,7 +108,7 @@
     <GameTable />
   {/if}
 {/if}
-
+<SoundPlayer />
 <style>
   body {
     margin: 0;

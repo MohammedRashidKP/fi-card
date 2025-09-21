@@ -8,5 +8,6 @@ data class HandInfo(
     val playerId: String,
     val hand: List<Card>,
     val openCard: Card? = null,
-    val canCall: Boolean = false
+    val canCall: Boolean = false,
+    val canStrike: Boolean = false
 )

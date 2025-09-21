@@ -1,6 +1,7 @@
 package game
 
 import com.closemates.games.game.GameRoom
+import com.closemates.games.game.value
 import com.closemates.games.models.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
@@ -34,6 +35,14 @@ object SessionRegistry {
         return sessions[roomId]?.find { it.playerId == playerId }?.session
     }
 
+    suspend fun sendChatToAll(roomId: String, playerId: String, message: String) {
+        val json = Json { prettyPrint = true }
+        val chatMessage = ChatMessage(playerId, message = message)
+        val chatMessageJson = json.encodeToString(chatMessage)
+        sessions[roomId]?.forEach { room ->
+            room.session.send(Frame.Text(chatMessageJson))
+        }
+    }
     suspend fun sendToAll(room: GameRoom) {
         val json = Json { prettyPrint = true }
 
@@ -50,9 +59,11 @@ object SessionRegistry {
             jokerCard = room.jokerCard,
             callerId = room.callerId,
             callValue = room.callValue,
+            strikerId = room.strikerId,
+            strikeValue = room.strikeValue,
             scoreCard = if (room.gameState == GameState.FINISHED) room.getScoreCard() else null,
             roundHistory = room.roundHistory,
-            globalLeaderBoard = room.globalLeaderBoard
+            globalLeaderBoard = room.globalLeaderBoard.sortedByDescending { it.points }
         )
 
         val snapshotJson = json.encodeToString(snapshot)
@@ -68,13 +79,20 @@ object SessionRegistry {
         // --- HandInfo (private, per player) ---
         room.players.forEach { player ->
             var canCall = false
+            var canStrike = false
             if (room.jokerCard != null) {
-                val sumRanks = player.hand
-                    .filter { room.jokerCard != null && it.rank != room.jokerCard?.rank }
-                    .sumOf { it.rank.value }
-                canCall = sumRanks <= 5
+                val handTotal = player.handValue(room.jokerCard!!)
+                canCall = handTotal <= 5
+                if (room.gameState == GameState.CALLED && room.callValue != null
+                    && room.callerId != null && room.callerId!! != player.id) {
+                    if (handTotal <= room.callValue!! ) {
+                        canStrike = true
+                    }
+                }
             }
-            val handInfo = HandInfo(player.id, player.hand, player.openCard, canCall)
+            val handInfo = HandInfo(player.id, player.hand
+                .sortedBy { room.jokerCard?.rank?.let { it1 -> it.value(it1) } },
+                player.openCard, canCall, canStrike)
             val handJson = json.encodeToString(handInfo)
             val session = getSession(room.id, player.id)
             try {
@@ -84,4 +102,39 @@ object SessionRegistry {
             }
         }
     }
+
+    suspend fun sendSoundToAll(roomId: String, soundCue: SoundCue) {
+
+        val json = Json { prettyPrint = true }
+        val soundCueJson = json.encodeToString(soundCue)
+        sessions[roomId]?.forEach { info ->
+            try {
+                info.session.send(Frame.Text(soundCueJson))
+            } catch (e: Exception) {
+                println("Failed to send GameSnapshot to ${info.playerId}: ${e.message}")
+            }
+        }
+    }
+
+    suspend fun sendSoundToPlayer(roomId: String, playerId: String, soundCue: SoundCue) {
+
+        val json = Json { prettyPrint = true }
+        val soundCueJson = json.encodeToString(soundCue)
+        val session = getSession(roomId, playerId)
+        try {
+            session?.send(Frame.Text(soundCueJson))
+        } catch (e: Exception) {
+            println("Failed to send Sound to ${playerId}: ${e.message}")
+        }
+    }
+
+    suspend fun forwardSignal(roomId: String, targetId: String, message: String) {
+        val session = getSession(roomId, targetId)
+        try {
+            session?.send(Frame.Text(message))
+        } catch (e: Exception) {
+            println("Failed to forward WebRTC signal to $targetId in room $roomId: ${e.message}")
+        }
+    }
+
 }

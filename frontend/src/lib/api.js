@@ -1,6 +1,8 @@
-import { gameSnapshot, handInfo, debugLog, wsConnection, hasDiscarded } from '$lib/stores';
+import { gameSnapshot, handInfo, debugLog, wsConnection, hasDiscarded, chatMessages } from '$lib/stores';
 import { get, writable } from 'svelte/store';
 import { getWebSocketHost } from '$lib/url';
+import { currentCue } from "$lib/stores";
+
 
 let socket;
 export const gameResult = writable(null);
@@ -44,10 +46,7 @@ export function connectWebSocket(roomId, playerId, playerName) {
       gameSnapshot.update(prev => ({
         ...prev,
         ...msg,
-        players: msg.players.map(p => {
-          const existing = prev.players.find(ep => ep.id === p.id) || {};
-          return { ...existing, ...p };
-        })
+        players: msg.players
       }));
 
             // If game finished → capture result in separate store
@@ -67,15 +66,30 @@ export function connectWebSocket(roomId, playerId, playerName) {
     // --- HandInfo (private to player) ---
 if (msg?.hand) {
   const prev = get(handInfo);
-
+const normalizedHand = (msg.hand || []).map(c => ({
+  ...c,
+  isJoker: c.rank === null || c.suit === null || c.jokerColor != null
+}));
   handInfo.set({
     ...prev,
     ...msg,
-    hand: msg.hand ? [...msg.hand] : prev.hand,
-    openCard: msg.openCard ?? null,
-    canCall: msg.hasOwnProperty("canCall") ? msg.canCall : false // force overwrite
+    hand: normalizedHand,
+    openCard: "openCard" in msg ? msg.openCard : null, // force overwrite
+    canCall: msg.hasOwnProperty("canCall") ? msg.canCall : false,
+    canStrike: msg.hasOwnProperty("canStrike") ? msg.canStrike : false // force overwrite
   });
   return;
+}
+
+  // --- SoundCue ---
+if (msg?.cue) {
+  currentCue.set(msg); // whole object {cue, volume, loop}
+   return;
+}
+if (msg?.message) {
+
+  chatMessages.update(messages => [...messages, msg]);
+   return;
 }
     console.warn("Unknown WS message", msg);
   };

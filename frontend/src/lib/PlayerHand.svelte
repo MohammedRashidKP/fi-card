@@ -98,11 +98,14 @@
              pointer-events: ${get(isMyTurn) && !get(hasDiscarded) ? 'auto' : 'none'};`}
     >
       <Card
+        card={card}
         rank={card.rank}
         suit={card.suit}
         selected={selectedCards.includes(i)}
         on:click={() => handleCardClick(i)}
         on:pointerdown={(e) => handleCardPointerDown(e.detail, i)}
+        isJoker={$gameSnapshot.jokerCard
+                        && card.rank === $gameSnapshot.jokerCard.rank}
         style="width: 70px; height: 110px;"
       />
     </div>
@@ -117,7 +120,7 @@
  {/if}
 
    <!-- Strike button -->
-   {#if $gameSnapshot.state === 'CALLED' && $handInfo.playerId !== $gameSnapshot.callerId}
+   {#if $handInfo.canStrike}
      <div class="call-container">
        <button class="strike-btn" on:click={handleStrikeClick}>
          Strike

@@ -18,6 +18,7 @@ export const gameSnapshot = writable({
   callerId: null,
   callValue: null,
   strikerId: null,
+  strikeValue: null,
   scoreCard: null,
   roundHistory: null,
   globalLeaderBoard: null
@@ -27,13 +28,23 @@ export const handInfo = writable({
   playerId: null,
   hand: [],
   openCard: null,
-  canCall: false
+  canCall: false,
+  canStrike: false
 });
+
+export const soundMap = {
+  PLAYER_TURN: "/sounds/notification.wav",
+  CALL: "/sounds/call_sound.mp3",
+  STRIKE: "/sounds/strike_sound.mp3",
+  CALLER_WIN: "/sounds/caller_win.mp3",
+  STRIKER_WIN: "/sounds/striker_win.mp3"
+};
+export const currentCue = writable(null);
 
 export const selectedCards = writable([]);
 export const discardedCards = writable([]); // for animation
 export const hasDiscarded = writable(false);
-
+export const chatMessages = writable([]);
 export const showScores = writable(false); // controls panel visibility
 export const isMyTurn = derived(
   [gameSnapshot, handInfo, hasDiscarded],
@@ -44,3 +55,9 @@ export const isMyTurn = derived(
     );
   }
 );
+
+export const playerInfo = writable({
+  id: null,
+  name: null,
+  roomId: null
+});
