@@ -1,18 +1,13 @@
-import adapter from '@sveltejs/adapter-static';
+// svelte.config.js
+import adapter from '@sveltejs/adapter-cloudflare';
 import { vitePreprocess } from '@sveltejs/kit/vite';
 
 const config = {
   preprocess: vitePreprocess(),
-
   kit: {
-    adapter: adapter({
-      pages: 'build',
-      assets: 'build',
-      fallback: 'app.html' // needed for SPA routing
-    }),
-    paths: {
-      base: '', // leave empty unless deploying under subpath
-    }
+    adapter: adapter(),
+    // optional: fallback for SPA routing
+    // paths: { base: '' },
   }
 };
 
