@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktor)
     alias(libs.plugins.kotlin.plugin.serialization)
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "com.closemates.games"
@@ -38,4 +39,10 @@ kotlin {
 tasks.withType<JavaCompile> {
     sourceCompatibility = "21"
     targetCompatibility = "21"
+}
+
+tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+    archiveBaseName.set("app")
+    archiveVersion.set("0.0.1")
+    mergeServiceFiles()
 }
