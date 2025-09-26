@@ -32,10 +32,10 @@ dependencies {
 
 kotlin {
     // Force Kotlin compiler to use Java 17 bytecode
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
 
 tasks.withType<JavaCompile> {
-    sourceCompatibility = "17"
-    targetCompatibility = "17"
+    sourceCompatibility = "21"
+    targetCompatibility = "21"
 }
