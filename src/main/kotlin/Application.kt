@@ -9,9 +9,7 @@ fun main(args: Array<String>) {
 
 fun Application.module() {
 
-    val frontendUrl = environment.config.property("ktor.app.frontendUrl").getString()
-
     configureSerialization()
-    configureSockets(frontendUrl)
-    configureCORS(frontendUrl)
+    configureSockets()
+    configureCORS()
 }

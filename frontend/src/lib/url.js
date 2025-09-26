@@ -30,5 +30,5 @@ export function getWebSocketHost() {
 
 // Frontend base URL
 export function getFrontendHost() {
-  return import.meta.env.VITE_FRONTEND_URL ?? location.origin;
+  return window.location.origin
 }

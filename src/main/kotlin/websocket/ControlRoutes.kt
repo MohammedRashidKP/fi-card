@@ -11,7 +11,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
 
-fun Route.controlRoutes(frontendUrl: String) {
+fun Route.controlRoutes() {
 
     post("/rooms") {
         val roomId = GameManager.createRoom()
@@ -19,7 +19,6 @@ fun Route.controlRoutes(frontendUrl: String) {
             val response = CreateRoomResponse(success = true)
             if (response.success){
                 response.roomId = roomId
-                response.joinUrl = "${frontendUrl}/join/${roomId}"
             }
             call.respond(response)
         } else {

@@ -21,6 +21,5 @@ data class ClientMessage(
 @Serializable
 data class CreateRoomResponse(
     val success: Boolean = false,
-    var roomId: String? = null,
-    var joinUrl: String? = null
+    var roomId: String? = null
 )
