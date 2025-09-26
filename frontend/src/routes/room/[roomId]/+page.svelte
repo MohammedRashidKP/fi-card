@@ -6,6 +6,8 @@
   import GameTable from '$lib/GameTable.svelte';
   import ChatPanel from '$lib/ChatPanel.svelte';
   import SoundPlayer from "$lib/SoundPlayer.svelte";
+  import { getApiHost } from '$lib/url';
+
 
   let roomId;
   let playerId = '';
@@ -44,7 +46,7 @@
 
   async function handleStartGame() {
     try {
-      const response = await fetch(`/api/rooms/${roomId}/start`, {
+      const response = await fetch(`${getApiHost()}/rooms/${roomId}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
