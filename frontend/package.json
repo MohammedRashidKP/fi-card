@@ -3,9 +3,8 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "svelte-kit build",
+    "deploy": "npm run build && npx wrangler deploy"
   },
   "devDependencies": {
     "@sveltejs/adapter-cloudflare": "^2.3.4",
